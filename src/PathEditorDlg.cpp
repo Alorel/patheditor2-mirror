@@ -1,219 +1,287 @@
-
-// PathEditorDlg.cpp : implementation file
-//
-
-#include "stdafx.h"
-#include "PathEditor.h"
 #include "PathEditorDlg.h"
-#include "afxdialogex.h"
-
+#include "resource.h"
 #include "Util.h"
 
-#include <iterator>
-#include <sstream>
+#include <algorithm>
 
-#ifdef _DEBUG
-#define new DEBUG_NEW
-#endif
-
-// CPathEditorDlg dialog
-
-CPathEditorDlg::CPathEditorDlg(CWnd* pParent /*=NULL*/)
-    : CDialogEx(CPathEditorDlg::IDD, pParent)
+CPathEditorDlg::CPathEditorDlg()
 {
-    m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
 
-void CPathEditorDlg::DoDataExchange(CDataExchange* pDX)
+CPathEditorDlg::~CPathEditorDlg()
 {
-    CDialogEx::DoDataExchange(pDX);
-    DDX_Control(pDX, IDC_LIST_USER, m_usrListCtrl);
-    DDX_Control(pDX, IDC_LIST_SYSTEM, m_sysListCtrl);
+	DestroyIcon(m_hIcon);
+	std::for_each( m_ButtonIcons.begin(), m_ButtonIcons.end(), DestroyIcon);
+	ImageList_Destroy(m_hImageList);
 }
 
-BEGIN_MESSAGE_MAP(CPathEditorDlg, CDialogEx)
-    ON_WM_PAINT()
-    ON_WM_QUERYDRAGICON()
-    ON_BN_CLICKED(IDC_BUTTON_USER_ADD, &CPathEditorDlg::OnBnClickedButtonUserAdd)
-    ON_BN_CLICKED(IDC_BUTTON_USER_REMOVE, &CPathEditorDlg::OnBnClickedButtonUserRemove)
-    ON_BN_CLICKED(IDC_BUTTON_SYSTEM_ADD, &CPathEditorDlg::OnBnClickedButtonSystemAdd)
-    ON_BN_CLICKED(IDC_BUTTON_SYSTEM_REMOVE, &CPathEditorDlg::OnBnClickedButtonSystemRemove)
-    ON_BN_CLICKED(IDC_BUTTON_USER_EDIT, &CPathEditorDlg::OnBnClickedButtonUserEdit)
-    ON_BN_CLICKED(IDC_BUTTON_SYSTEM_EDIT, &CPathEditorDlg::OnBnClickedButtonSystemEdit)
-    ON_NOTIFY(LVN_GETDISPINFO, IDC_LIST_USER, &CPathEditorDlg::OnGetdispinfoListUser)
-    ON_NOTIFY(LVN_GETDISPINFO, IDC_LIST_SYSTEM, &CPathEditorDlg::OnGetdispinfoListSystem)
-    ON_BN_CLICKED(IDC_BUTTON_USER_UP, &CPathEditorDlg::OnBnClickedButtonUserUp)
-    ON_BN_CLICKED(IDC_BUTTON_USER_DOWN, &CPathEditorDlg::OnBnClickedButtonUserDown)
-    ON_BN_CLICKED(IDC_BUTTON_SYSTEM_UP, &CPathEditorDlg::OnBnClickedButtonSystemUp)
-    ON_BN_CLICKED(IDC_BUTTON_SYSTEM_DOWN, &CPathEditorDlg::OnBnClickedButtonSystemDown)
-    ON_NOTIFY(NM_DBLCLK, IDC_LIST_USER, &CPathEditorDlg::OnNMDblclkListUser)
-    ON_NOTIFY(NM_DBLCLK, IDC_LIST_SYSTEM, &CPathEditorDlg::OnNMDblclkListSystem)
-END_MESSAGE_MAP()
-
-// CPathEditorDlg message handlers
-
-BOOL CPathEditorDlg::OnInitDialog()
+// copied whole stock from atlwin.h
+// trimmed ATL dependent macros, mostly asserts.
+BOOL CPathEditorDlg::_CenterWindow()
 {
-    CDialogEx::OnInitDialog();
+	// determine owner window to center against
+	DWORD dwStyle = (DWORD)::GetWindowLong(m_hWnd, GWL_STYLE);
+	HWND hWndCenter = NULL;
+	if(dwStyle & WS_CHILD)
+		hWndCenter = ::GetParent(m_hWnd);
+	else
+		hWndCenter = ::GetWindow(m_hWnd, GW_OWNER);
 
-    // Set the icon for this dialog.  The framework does this automatically
-    //  when the application's main window is not a dialog
-    SetIcon(m_hIcon, TRUE);			// Set big icon
-    SetIcon(m_hIcon, FALSE);		// Set small icon
+	// get coordinates of the window relative to its parent
+	RECT rcDlg;
+	::GetWindowRect(m_hWnd, &rcDlg);
+	RECT rcArea;
+	RECT rcCenter;
+	HWND hWndParent;
+	if(!(dwStyle & WS_CHILD))
+	{
+		// don't center against invisible or minimized windows
+		if(hWndCenter != NULL)
+		{
+			DWORD dwStyleCenter = ::GetWindowLong(hWndCenter, GWL_STYLE);
+			if(!(dwStyleCenter & WS_VISIBLE) || (dwStyleCenter & WS_MINIMIZE))
+				hWndCenter = NULL;
+		}
 
-    m_bIsAdmin = GetAdminStatus(::GetCurrentProcess());
-    m_usrListCtrl.Init( HKEY_CURRENT_USER, _T("Environment"), _T("Path"));
+		HMONITOR hMonitor = NULL;
+		if(hWndCenter != NULL)
+		{
+			hMonitor = ::MonitorFromWindow(hWndCenter, MONITOR_DEFAULTTONEAREST);
+		}
+		else
+		{
+			hMonitor = ::MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
+		}
+
+		MONITORINFO minfo;
+		minfo.cbSize = sizeof(MONITORINFO);
+		BOOL bResult = ::GetMonitorInfo(hMonitor, &minfo);
+
+		rcArea = minfo.rcWork;
+		if(hWndCenter == NULL)
+			rcCenter = rcArea;
+		else
+			::GetWindowRect(hWndCenter, &rcCenter);
+	}
+	else
+	{
+		// center within parent client coordinates
+		hWndParent = ::GetParent(m_hWnd);
+
+		::GetClientRect(hWndParent, &rcArea);
+		::GetClientRect(hWndCenter, &rcCenter);
+		::MapWindowPoints(hWndCenter, hWndParent, (POINT*)&rcCenter, 2);
+	}
+
+	int DlgWidth = rcDlg.right - rcDlg.left;
+	int DlgHeight = rcDlg.bottom - rcDlg.top;
+
+	// find dialog's upper left based on rcCenter
+	int xLeft = (rcCenter.left + rcCenter.right) / 2 - DlgWidth / 2;
+	int yTop = (rcCenter.top + rcCenter.bottom) / 2 - DlgHeight / 2;
+
+	// if the dialog is outside the screen, move it inside
+	if(xLeft + DlgWidth > rcArea.right)
+		xLeft = rcArea.right - DlgWidth;
+	if(xLeft < rcArea.left)
+		xLeft = rcArea.left;
+
+	if(yTop + DlgHeight > rcArea.bottom)
+		yTop = rcArea.bottom - DlgHeight;
+	if(yTop < rcArea.top)
+		yTop = rcArea.top;
+
+	// map screen coordinates to child coordinates
+	return ::SetWindowPos(m_hWnd, NULL, xLeft, yTop, -1, -1,
+		SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+BOOL CPathEditorDlg::_CreateImageList()
+{
+	m_hImageList = ImageList_Create(16, 16, ILC_MASK | ILC_COLOR32, 2, 2);
+	if( m_hImageList == NULL)
+		return FALSE;
+
+    HICON hIconExist = LoadIconW( m_hInstance, MAKEINTRESOURCE(IDI_ICON_EXIST));
+    ImageList_ReplaceIcon( m_hImageList, -1, hIconExist);
+    if( DeleteObject(hIconExist))
+		return FALSE;
+
+    HICON hIconNonExist = LoadIconW( m_hInstance, MAKEINTRESOURCE(IDI_ICON_NON_EXIST));
+	ImageList_ReplaceIcon( m_hImageList, -1, hIconNonExist);
+	if( DeleteObject(hIconNonExist))
+		return FALSE;
+	return TRUE;
+}
+
+BOOL CPathEditorDlg::_SetButtonIcons()
+{
+	HICON hAddIcon = (HICON)LoadImage( m_hInstance, MAKEINTRESOURCE(IDI_ICON_DIR_ADD), IMAGE_ICON, 16, 16, LR_SHARED);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_USER_ADD), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hAddIcon);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_ADD), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hAddIcon);
+	m_ButtonIcons.push_back(hAddIcon);
+
+	HICON hDelIcon = (HICON)LoadImage( m_hInstance, MAKEINTRESOURCE(IDI_ICON_DIR_DEL), IMAGE_ICON, 16, 16, LR_SHARED);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_USER_REMOVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hDelIcon);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_REMOVE), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hDelIcon);
+	m_ButtonIcons.push_back(hDelIcon);
+
+	HICON hEditIcon = (HICON)LoadImage( m_hInstance, MAKEINTRESOURCE(IDI_ICON_DIR_EDIT), IMAGE_ICON, 16, 16, LR_SHARED);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_USER_EDIT), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hEditIcon);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_EDIT), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hEditIcon);
+	m_ButtonIcons.push_back(hEditIcon);
+
+	HICON hUpIcon = (HICON)LoadImage( m_hInstance, MAKEINTRESOURCE(IDI_ICON_DIR_UP), IMAGE_ICON, 16, 16, LR_SHARED);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_USER_UP), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hUpIcon);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_UP), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hUpIcon);
+	m_ButtonIcons.push_back(hUpIcon);
+
+	HICON hDownIcon = (HICON)LoadImage( m_hInstance, MAKEINTRESOURCE(IDI_ICON_DIR_DOWN), IMAGE_ICON, 16, 16, LR_SHARED);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_USER_DOWN), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hDownIcon);
+	SendMessage( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_DOWN), BM_SETIMAGE, IMAGE_ICON, (LPARAM)hDownIcon);
+	m_ButtonIcons.push_back(hDownIcon);
+
+	return TRUE;
+}
+
+BOOL CPathEditorDlg::OnInitDialog( HINSTANCE hInstance, HWND hWnd)
+{
+	// save interesting handles
+	m_hWnd = hWnd;
+	m_hInstance = hInstance;
+
+	// set application icon
+	m_hIcon = LoadIconW(hInstance, MAKEINTRESOURCE(IDR_MAINFRAME));
+	SendMessage(m_hWnd, WM_SETICON, TRUE, (LPARAM)m_hIcon);
+	SendMessage(m_hWnd, WM_SETICON, FALSE, (LPARAM)m_hIcon);
+
+	if( _SetButtonIcons() == FALSE)
+		return FALSE;
+	if( _CreateImageList() == FALSE)
+		return FALSE;
+	if( _CenterWindow() == FALSE)
+		return FALSE;
+
+	m_bIsAdmin = GetAdminStatus(::GetCurrentProcess());
+	m_usrListCtrl.Init( ::GetDlgItem(m_hWnd, IDC_LIST_USER), m_hImageList,
+		HKEY_CURRENT_USER, L"Environment", L"Path");
     if(m_bIsAdmin.first)
-        m_sysListCtrl.Init( HKEY_LOCAL_MACHINE, _T("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment"), _T("Path"));
-
-    m_pImageList = new CImageList();
-    m_pImageList->Create( 16, 16, ILC_MASK | ILC_COLOR32, 0, 2);
-    m_pImageList->Add( AfxGetApp()->LoadIcon( IDI_ICON_EXIST));
-    m_pImageList->Add( AfxGetApp()->LoadIcon( IDI_ICON_NON_EXIST));
-
-    m_usrListCtrl.SetImageList( m_pImageList, LVSIL_SMALL);
-    if(m_bIsAdmin.first)
-    {
-        m_sysListCtrl.SetImageList( m_pImageList, LVSIL_SMALL);
-    }
-    else
-    {
-        GetDlgItem(IDC_BUTTON_SYSTEM_UP)->EnableWindow(FALSE);
-        GetDlgItem(IDC_BUTTON_SYSTEM_DOWN)->EnableWindow(FALSE);
-        GetDlgItem(IDC_BUTTON_SYSTEM_ADD)->EnableWindow(FALSE);
-        GetDlgItem(IDC_BUTTON_SYSTEM_REMOVE)->EnableWindow(FALSE);
-        GetDlgItem(IDC_BUTTON_SYSTEM_EDIT)->EnableWindow(FALSE);
-    }
-
-    return TRUE;  // return TRUE  unless you set the focus to a control
+	{
+        m_sysListCtrl.Init( ::GetDlgItem(m_hWnd, IDC_LIST_SYSTEM), m_hImageList,
+			HKEY_LOCAL_MACHINE,
+			L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+			L"Path");
+	}
+	else
+	{
+		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_UP),     FALSE);
+		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_DOWN),   FALSE);
+		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_ADD),    FALSE);
+		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_REMOVE), FALSE);
+		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_EDIT),   FALSE);
+	}
+	return TRUE;
 }
 
-// If you add a minimize button to your dialog, you will need the code below
-//  to draw the icon.  For MFC applications using the document/view model,
-//  this is automatically done for you by the framework.
-
-void CPathEditorDlg::OnPaint()
+BOOL CPathEditorDlg::OnCommand( UINT nMsg, WPARAM wParam, LPARAM lParam)
 {
-    if (IsIconic())
-    {
-        CPaintDC dc(this); // device context for painting
-
-        SendMessage(WM_ICONERASEBKGND, reinterpret_cast<WPARAM>(dc.GetSafeHdc()), 0);
-
-        // Center icon in client rectangle
-        int cxIcon = GetSystemMetrics(SM_CXICON);
-        int cyIcon = GetSystemMetrics(SM_CYICON);
-        CRect rect;
-        GetClientRect(&rect);
-        int x = (rect.Width() - cxIcon + 1) / 2;
-        int y = (rect.Height() - cyIcon + 1) / 2;
-
-        // Draw the icon
-        dc.DrawIcon(x, y, m_hIcon);
-    }
-    else
-    {
-        CDialogEx::OnPaint();
-    }
+	switch(LOWORD(wParam))
+	{
+	case IDC_BUTTON_USER_UP:
+		m_usrListCtrl.MoveUp();
+		break;
+	case IDC_BUTTON_USER_DOWN:
+		m_usrListCtrl.MoveDown();
+		break;
+	case IDC_BUTTON_USER_ADD:
+		m_usrListCtrl.AddPath();
+		break;
+	case IDC_BUTTON_USER_REMOVE:
+		m_usrListCtrl.RemovePath();
+		break;
+	case IDC_BUTTON_USER_EDIT:
+		m_usrListCtrl.EditPath();
+		break;
+	case IDC_BUTTON_SYSTEM_UP:
+		m_usrListCtrl.EditPath();
+		break;
+	case IDC_BUTTON_SYSTEM_DOWN:
+		m_sysListCtrl.MoveDown();
+		break;
+	case IDC_BUTTON_SYSTEM_ADD:
+		m_sysListCtrl.AddPath();
+		break;
+	case IDC_BUTTON_SYSTEM_REMOVE:
+		m_sysListCtrl.RemovePath();
+		break;
+	case IDC_BUTTON_SYSTEM_EDIT:
+		m_sysListCtrl.EditPath();
+		break;
+	case IDOK:
+		OnOK();
+	case IDCANCEL:
+		SendMessage(m_hWnd, WM_CLOSE, 0, 0);
+		return TRUE;
+	}
+	return FALSE;
 }
 
-// The system calls this function to obtain the cursor to display while the user drags
-//  the minimized window.
-HCURSOR CPathEditorDlg::OnQueryDragIcon()
+BOOL CPathEditorDlg::OnNotify( LPNMHDR lpNMHDR)
 {
-    return static_cast<HCURSOR>(m_hIcon);
+	switch(lpNMHDR->code)
+	{
+	case NM_DBLCLK:
+		OnListDoubleClick(reinterpret_cast<LPNMITEMACTIVATE>(lpNMHDR));
+		break;
+	case LVN_GETDISPINFO:
+		OnListGetDispInfo(reinterpret_cast<NMLVDISPINFO*>(lpNMHDR));
+		break;
+	}
+	return TRUE;
 }
 
-void CPathEditorDlg::OnOK()
+void CPathEditorDlg::OnListGetDispInfo(NMLVDISPINFO *pDispInfo)
 {
-    if( !m_usrListCtrl.Commit())
-    {
-        MessageBox( L"Failed to save User PATH");
-        return;
-    }
-
-    if( m_bIsAdmin.first && !m_sysListCtrl.Commit())
-    {
-        MessageBox( L"Failed to save System PATH");
-        return;
-    }
-
-    // broadcast path change messages to interested parties
-    DWORD_PTR dwResult = 0;
-    SendMessageTimeout( HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)_T("Environment"), SMTO_ABORTIFHUNG, 1, &dwResult);
-
-    m_pImageList->DeleteImageList();
-    delete m_pImageList;
-
-    CDialogEx::OnOK();
+	switch(pDispInfo->hdr.idFrom)
+	{
+	case IDC_LIST_USER:
+		m_usrListCtrl.OnGetdispinfo(pDispInfo);
+		break;
+	case IDC_LIST_SYSTEM:
+		m_sysListCtrl.OnGetdispinfo(pDispInfo);
+		break;
+	}
 }
 
-void CPathEditorDlg::OnBnClickedButtonUserAdd()
+void CPathEditorDlg::OnListDoubleClick(LPNMITEMACTIVATE lpNMItemActivate)
 {
-    m_usrListCtrl.AddPath();
+	switch(lpNMItemActivate->hdr.idFrom)
+	{
+	case IDC_LIST_USER:
+		m_usrListCtrl.OnDoubleClick(lpNMItemActivate);
+		break;
+	case IDC_LIST_SYSTEM:
+		m_sysListCtrl.OnDoubleClick(lpNMItemActivate);
+		break;
+	}
 }
 
-void CPathEditorDlg::OnBnClickedButtonUserEdit()
+BOOL CPathEditorDlg::OnOK()
 {
-    m_usrListCtrl.EditPath();
-}
+	if( !m_usrListCtrl.Commit())
+	{
+		MessageBox( m_hWnd, L"Failed to save User PATH", L"Path Editor", MB_OK);
+		return FALSE;
+	}
 
-void CPathEditorDlg::OnBnClickedButtonUserRemove()
-{
-    m_usrListCtrl.RemovePath();
-}
+	if( m_bIsAdmin.first && !m_sysListCtrl.Commit())
+	{
+		MessageBox( m_hWnd, L"Failed to save System PATH", L"Path Editor", MB_OK);
+		return FALSE;
+	}
 
-void CPathEditorDlg::OnBnClickedButtonSystemAdd()
-{
-    m_sysListCtrl.AddPath();
-}
-
-void CPathEditorDlg::OnBnClickedButtonSystemEdit()
-{
-    m_sysListCtrl.EditPath();
-}
-
-void CPathEditorDlg::OnBnClickedButtonSystemRemove()
-{
-    m_sysListCtrl.RemovePath();
-}
-
-void CPathEditorDlg::OnGetdispinfoListUser(NMHDR *pNMHDR, LRESULT *pResult)
-{
-    m_usrListCtrl.OnGetdispinfo( pNMHDR, pResult);
-}
-
-void CPathEditorDlg::OnGetdispinfoListSystem(NMHDR *pNMHDR, LRESULT *pResult)
-{
-    m_sysListCtrl.OnGetdispinfo( pNMHDR, pResult);
-}
-
-void CPathEditorDlg::OnBnClickedButtonUserUp()
-{
-    m_usrListCtrl.MoveUp();
-}
-
-void CPathEditorDlg::OnBnClickedButtonUserDown()
-{
-    m_usrListCtrl.MoveDown();
-}
-
-void CPathEditorDlg::OnBnClickedButtonSystemUp()
-{
-    m_sysListCtrl.MoveUp();
-}
-
-void CPathEditorDlg::OnBnClickedButtonSystemDown()
-{
-    m_sysListCtrl.MoveDown();
-}
-
-void CPathEditorDlg::OnNMDblclkListUser(NMHDR *pNMHDR, LRESULT *pResult)
-{
-    m_usrListCtrl.OnNMDblclkList(pNMHDR, pResult);
-}
-
-void CPathEditorDlg::OnNMDblclkListSystem(NMHDR *pNMHDR, LRESULT *pResult)
-{
-    m_sysListCtrl.OnNMDblclkList(pNMHDR, pResult);
+	// broadcast path change messages to interested parties
+	DWORD_PTR dwResult = 0;
+	SendMessageTimeout( HWND_BROADCAST, WM_SETTINGCHANGE, 0, (LPARAM)L"Environment", SMTO_ABORTIFHUNG, 1, &dwResult);
+	return TRUE;
 }

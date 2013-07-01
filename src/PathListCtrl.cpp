@@ -1,120 +1,115 @@
-// PathListCtrl.cpp : implementation file
-//
-
-#include "stdafx.h"
-
-#include "PathEditor.h"
 #include "PathListCtrl.h"
-
+#include <shlobj.h>
 #include <algorithm>
 #include <iterator>
+#include "resource.h"
 
-// CPathListCtrl
-
-IMPLEMENT_DYNAMIC(CPathListCtrl, CListCtrl)
-
-int CALLBACK BrowseCallbackProc( HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData)
+int CALLBACK BrowseCallbackProc( HWND hWnd, UINT uMsg, LPARAM lParam, LPARAM lpData)
 {
     if( uMsg == BFFM_INITIALIZED)
-        SendMessage( hwnd, BFFM_SETSELECTION, TRUE, lpData);
+        SendMessage( hWnd, BFFM_SETSELECTION, TRUE, lpData);
     return 0;
 }
 
-BEGIN_MESSAGE_MAP(CPathListCtrl, CListCtrl)
-END_MESSAGE_MAP()
-
-// CPathListCtrl message handlers
-
 void CPathListCtrl::_ExpandEnvironmentStrings( wchar_t* pszDst, int nLen, const std::wstring& sVar)
 {
-	if( std::wstring::npos != sVar.find( _T('%')))
-	{
-		ExpandEnvironmentStrings( sVar.c_str(), pszDst, nLen);
-		return;
-	}
+    if( std::wstring::npos != sVar.find( L'%'))
+    {
+        ExpandEnvironmentStrings( sVar.c_str(), pszDst, nLen);
+        return;
+    }
 
-	stdext::checked_array_iterator<wchar_t*> iter(pszDst, nLen);
-	std::size_t nMaxCopy = nLen;
-	if( nMaxCopy >= sVar.size())
-		nMaxCopy = sVar.size();
-	std::copy_n( sVar.begin(), nMaxCopy, iter);
+    stdext::checked_array_iterator<wchar_t*> iter( pszDst, nLen);
+    std::size_t nMaxCopy = nLen;
+    if( nMaxCopy >= sVar.size())
+        nMaxCopy = sVar.size();
+    std::copy_n( sVar.begin(), nMaxCopy, iter);
 }
 
 int CPathListCtrl::_GetImageIndex( std::wstring fname)
 {
     int imgIndex = 0;
-	WCHAR szDst[MAX_PATH] = { 0 };
-	_ExpandEnvironmentStrings( szDst, MAX_PATH, fname);
+    WCHAR szDst[MAX_PATH] = { 0 };
+    _ExpandEnvironmentStrings( szDst, MAX_PATH, fname);
     return GetFileAttributes( szDst) == INVALID_FILE_ATTRIBUTES ? 1 : 0;
 }
 
-void CPathListCtrl::Init( HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName)
+void CPathListCtrl::Init( HWND hWnd, HIMAGELIST hImageList, HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName)
 {
-    m_reader = CPathReader( hKey, lpszKeyName, lpszValueName);
-	m_reader.Read( m_str_list);
+    m_hWnd = hWnd;
+    ListView_SetImageList( m_hWnd, hImageList, LVSIL_SMALL);
 
-    CRect reg;
-    GetHeaderCtrl()->GetWindowRect( reg);
+    RECT reg;
+    ::GetWindowRect( ListView_GetHeader( m_hWnd), &reg);
 
     LVCOLUMN lvColumn = { 0 };
     lvColumn.mask = LVCF_WIDTH;
-    lvColumn.cx = reg.Width();
-    InsertColumn( 0, &lvColumn);
+    lvColumn.cx = reg.right - reg.left;
+    ListView_InsertColumn( m_hWnd, 0, &lvColumn);
 
-    SetExtendedStyle( LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+	DWORD dwStyle = LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES;
+    ListView_SetExtendedListViewStyle( m_hWnd, dwStyle);
 
+	// load data
+	m_reader = CPathReader( hKey, lpszKeyName, lpszValueName);
+    m_reader.Read( m_str_list);
     for( std::size_t count = 0; count < m_str_list.size(); ++count)
     {
         LVITEM lvItem = { 0 };
         lvItem.mask = LVIF_TEXT | LVIF_STATE | LVIF_IMAGE;
-        lvItem.iItem = count;
+        lvItem.iItem = static_cast<int>(count);
         lvItem.iImage = I_IMAGECALLBACK;
         lvItem.pszText = LPSTR_TEXTCALLBACK;
-        InsertItem( &lvItem);
+        ListView_InsertItem( m_hWnd, &lvItem);
     }
 }
 
 bool CPathListCtrl::Commit()
 {
     StringListT strList;
-    for( int i = 0; i < GetItemCount(); ++i)
-        strList.push_back( GetItemText( i, 0).GetString());
+    for( int i = 0; i < ListView_GetItemCount( m_hWnd); ++i)
+    {
+        wchar_t pszText[MAX_PATH];
+        int cchTextMax = MAX_PATH;
+        ListView_GetItemText( m_hWnd, i, 0, pszText, cchTextMax);
+        strList.push_back( std::wstring( pszText));
+    }
     return m_reader.Write( strList);
 }
 
 void CPathListCtrl::AddPath()
 {
     BROWSEINFO bi = { 0 };
-    bi.hwndOwner = GetParent()->GetSafeHwnd();
+    bi.hwndOwner = GetParent(m_hWnd);
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_EDITBOX | BIF_USENEWUI | BIF_NEWDIALOGSTYLE;
     PIDLIST_ABSOLUTE strList = SHBrowseForFolder( &bi);
     if( strList)
     {
-		TCHAR szPath[MAX_PATH] = { 0 };
+        TCHAR szPath[MAX_PATH] = { 0 };
         SHGetPathFromIDList( strList, szPath);
         m_str_list.push_back( szPath);
 
         LVITEM lvItem = { 0 };
         lvItem.mask = LVIF_TEXT | LVIF_STATE;
-        lvItem.iItem = GetItemCount();
+        lvItem.iItem = ListView_GetItemCount( m_hWnd);
         lvItem.pszText = LPSTR_TEXTCALLBACK;
-        InsertItem( &lvItem);
+        ListView_InsertItem( m_hWnd, &lvItem);
     }
 }
 
 void CPathListCtrl::EditPath()
 {
-    int iItem = GetNextItem( -1, LVNI_SELECTED);
+    int iItem = ListView_GetNextItem( m_hWnd, -1, LVNI_SELECTED);
     if( iItem == -1)
         return;
 
     BROWSEINFO bi = { 0 };
-    bi.hwndOwner = GetParent()->GetSafeHwnd();
+    bi.hwndOwner = GetParent(m_hWnd);
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_EDITBOX | BIF_USENEWUI | BIF_NEWDIALOGSTYLE;
     bi.lpfn = BrowseCallbackProc;
 
-	WCHAR szDst[MAX_PATH] = { 0 };
-	_ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
+    WCHAR szDst[MAX_PATH] = { 0 };
+    _ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
     bi.lParam = reinterpret_cast<LPARAM>( szDst);
 
     PIDLIST_ABSOLUTE strList = SHBrowseForFolder( &bi);
@@ -123,117 +118,79 @@ void CPathListCtrl::EditPath()
         TCHAR szPath[MAX_PATH];
         SHGetPathFromIDList( strList, szPath);
         m_str_list[iItem] = szPath;
-        Update( iItem);
+        ListView_Update( m_hWnd, iItem);
     }
 }
 
-void CPathListCtrl::OnNMDblclkList(NMHDR *pNMHDR, LRESULT *pResult)
+void CPathListCtrl::OnDoubleClick( LPNMITEMACTIVATE lpNMItemActivate)
 {
-    LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
-    int iItem = pNMItemActivate->iItem;
-
+    int iItem = lpNMItemActivate->iItem;
     if( iItem == -1)
         return;
 
-	WCHAR szDst[MAX_PATH] = { 0 };
-	_ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
-    ShellExecute(0, _T("open"), _T("explorer.exe"), szDst, 0, SW_NORMAL);
-    *pResult = 0;
+    WCHAR szDst[MAX_PATH] = { 0 };
+    _ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
+    ShellExecute( 0, L"open", L"explorer.exe", szDst, 0, SW_NORMAL);
 }
 
 void CPathListCtrl::RemovePath()
 {
-    int iItem = GetNextItem( -1, LVNI_SELECTED);
+    int iItem = ListView_GetNextItem( m_hWnd, -1, LVNI_SELECTED);
     if( iItem == -1)
         return;
 
     m_str_list.erase( std::find( m_str_list.begin(), m_str_list.end(), m_str_list[iItem]));
-    DeleteItem( iItem);
-    Update( iItem);
+    ListView_DeleteItem( m_hWnd, iItem);
+    ListView_Update( m_hWnd, iItem);
 
     if( iItem == m_str_list.size())
         iItem = iItem - 1;
-    SetItemState( iItem, LVNI_SELECTED, LVNI_SELECTED);
+    ListView_SetItemState( m_hWnd, iItem, LVNI_SELECTED, LVNI_SELECTED);
 }
 
-void CPathListCtrl::OnGetdispinfo(NMHDR *pNMHDR, LRESULT *pResult)
+void CPathListCtrl::OnGetdispinfo( NMLVDISPINFO *pDispInfo)
 {
-    NMLVDISPINFO *pDispInfo = reinterpret_cast<NMLVDISPINFO*>(pNMHDR);
     if( pDispInfo->item.mask & LVIF_TEXT)
-	{
+    {
         if( pDispInfo->item.iSubItem == 0)
-		{
-			std::wstring& sItem = m_str_list[pDispInfo->item.iItem];
-			stdext::checked_array_iterator<wchar_t*> iter(pDispInfo->item.pszText, pDispInfo->item.cchTextMax);
-			std::size_t nLen = pDispInfo->item.cchTextMax;
+        {
+            std::wstring& sItem = m_str_list[pDispInfo->item.iItem];
+            stdext::checked_array_iterator<wchar_t*> iter( pDispInfo->item.pszText, pDispInfo->item.cchTextMax);
+            std::size_t nLen = pDispInfo->item.cchTextMax;
 
-			if(nLen >= sItem.size())
-				nLen = sItem.size();
-			auto iterLast = std::copy_n( sItem.begin(), nLen, iter);
-			*iterLast = L'\0';
-		}
-	}
+            if( nLen >= sItem.size())
+                nLen = sItem.size();
+            auto iterLast = std::copy_n( sItem.begin(), nLen, iter);
+            *iterLast = L'\0';
+        }
+    }
 
     if( pDispInfo->item.mask & LVIF_IMAGE)
         pDispInfo->item.iImage = _GetImageIndex( m_str_list[pDispInfo->item.iItem]);
-
-    *pResult = 0;
 }
 
 void CPathListCtrl::MoveUp()
 {
-    int iItem = GetNextItem( -1, LVNI_SELECTED);
+    int iItem = ListView_GetNextItem( m_hWnd, -1, LVNI_SELECTED);
     if( iItem == -1 || iItem == 0)
         return;
 
     m_str_list[iItem].swap( m_str_list[iItem - 1]);
-    Update( iItem);
-    Update( iItem - 1);
-    SetItemState( iItem - 1, LVNI_SELECTED, LVNI_SELECTED);
-    EnsureVisible( iItem - 1, FALSE);
+    ListView_Update( m_hWnd, iItem);
+    ListView_Update( m_hWnd, iItem - 1);
+    ListView_SetItemState( m_hWnd, iItem - 1, LVNI_SELECTED, LVNI_SELECTED);
+    ListView_EnsureVisible( m_hWnd, iItem - 1, FALSE);
 }
 
 void CPathListCtrl::MoveDown()
 {
-    int iItem = GetNextItem( -1, LVNI_SELECTED);
+    int iItem = ListView_GetNextItem( m_hWnd, -1, LVNI_SELECTED);
     if( iItem == -1 || ( iItem == ( m_str_list.size() - 1)))
         return;
 
     m_str_list[iItem].swap( m_str_list[iItem + 1]);
-    Update( iItem);
-    Update( iItem + 1);
-    SetItemState( iItem + 1, LVNI_SELECTED, LVNI_SELECTED);
-    EnsureVisible( iItem + 1, FALSE);
+    ListView_Update( m_hWnd, iItem);
+    ListView_Update( m_hWnd, iItem + 1);
+    ListView_SetItemState( m_hWnd, iItem + 1, LVNI_SELECTED, LVNI_SELECTED);
+    ListView_EnsureVisible( m_hWnd, iItem + 1, FALSE);
 }
-
-//void CPathListCtrl::BeginEditing()
-//{
-//    int iItem = GetNextItem( -1, LVNI_SELECTED);
-//    if( iItem == -1)
-//        return;
-//
-//    CRect reg;
-//    GetItemRect( iItem, reg, LVIR_LABEL);
-//    ClientToScreen( reg);
-//    GetParent()->ScreenToClient( reg);
-//
-//    const int BROWSE_BUTTON_WIDTH = 25;
-//    CRect rect = reg;
-//    rect.left  = reg.right - BROWSE_BUTTON_WIDTH;
-//    rect.right = rect.left + BROWSE_BUTTON_WIDTH;
-//
-//    m_pButton = new CButton();
-//    BOOL retVal = m_pButton->Create( _T("..."), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, rect, GetParent(), IDC_BUTTON_BROWSE);
-//
-//    CRect erect = reg;
-//    erect.right = reg.right - BROWSE_BUTTON_WIDTH;
-//    m_pEdit = new CEdit();
-//    retVal = m_pEdit->Create( WS_CHILD | WS_VISIBLE | WS_BORDER, erect, GetParent(), IDC_EDIT_DIR);
-//
-//    m_pEdit->SetFont( GetFont());
-//    m_pEdit->SetFocus();
-//    m_pEdit->SetWindowText( m_str_list[iItem].c_str());
-//    m_pEdit->SetSel( 0, -1);
-//
-//    SHAutoComplete( m_pEdit->GetSafeHwnd(), SHACF_FILESYS_DIRS);
-//}

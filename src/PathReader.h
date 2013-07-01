@@ -1,5 +1,6 @@
 #pragma once
 
+#include <windows.h>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,7 @@ public:
     bool Read( StringListT& strList);
     bool Write( const StringListT& strList);
 
-    CPathReader(void);
+    CPathReader();
     CPathReader( HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName);
-    ~CPathReader(void);
+    ~CPathReader();
 };

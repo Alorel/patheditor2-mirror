@@ -1,37 +1,35 @@
-#pragma once
+#include <windows.h>
+#include <commctrl.h>
 
 #include "PathReader.h"
+#include <vector>
+#include <string>
 
-// CPathListCtrl
+typedef std::vector<std::wstring> StringListT;
 
-class CPathListCtrl : public CListCtrl
+class CPathListCtrl
 {
-    DECLARE_DYNAMIC(CPathListCtrl)
+private:
+	HWND m_hWnd;
 
-    CPathReader m_reader;
-    StringListT m_str_list;
-    // CEdit* m_pEdit;
-    // CButton* m_pButton;
-
-protected:
-    DECLARE_MESSAGE_MAP()
+	StringListT m_str_list;
+	CPathReader m_reader;
 
 private:
 	void _ExpandEnvironmentStrings( wchar_t* pszDst, int nLen, const std::wstring& sVar);
-    int _GetImageIndex( std::wstring fname);
+	int _GetImageIndex( std::wstring fname);
 
 public:
-    afx_msg void OnGetdispinfo(NMHDR *pNMHDR, LRESULT *pResult);
-    afx_msg void OnBeginlabeledit(NMHDR *pNMHDR, LRESULT *pResult);
-    afx_msg void OnEndlabeledit(NMHDR *pNMHDR, LRESULT *pResult);
-    afx_msg void OnNMDblclkList(NMHDR *pNMHDR, LRESULT *pResult);
+	void Init( HWND hWnd, HIMAGELIST hImageList, HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName);
+	bool Commit();
 
-    void Init( HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName);
-    bool Commit();
-    void AddPath();
-    void EditPath();
-    void RemovePath();
+	void AddPath();
+	void EditPath();
+	void RemovePath();
 
-    void MoveUp();
-    void MoveDown();
+	void MoveUp();
+	void MoveDown();
+
+	void OnDoubleClick(LPNMITEMACTIVATE lpNMItemActivate);
+	void OnGetdispinfo(NMLVDISPINFO *pDispInfo);
 };
