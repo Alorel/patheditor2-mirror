@@ -203,7 +203,7 @@ BOOL CPathEditorDlg::OnCommand( UINT nMsg, WPARAM wParam, LPARAM lParam)
 		m_usrListCtrl.EditPath();
 		break;
 	case IDC_BUTTON_SYSTEM_UP:
-		m_usrListCtrl.EditPath();
+		m_sysListCtrl.MoveUp();
 		break;
 	case IDC_BUTTON_SYSTEM_DOWN:
 		m_sysListCtrl.MoveDown();
