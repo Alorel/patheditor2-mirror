@@ -167,13 +167,18 @@ BOOL CPathEditorDlg::OnInitDialog( HINSTANCE hInstance, HWND hWnd)
 		HKEY_CURRENT_USER, L"Environment", L"Path");
     if(m_bIsAdmin.first)
 	{
-        m_sysListCtrl.Init( ::GetDlgItem(m_hWnd, IDC_LIST_SYSTEM), m_hImageList,
+		::ShowWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_GAIN_PRIVILEGE), SW_HIDE);
+        m_sysListCtrl.Init( ::GetDlgItem( m_hWnd, IDC_LIST_SYSTEM), m_hImageList,
 			HKEY_LOCAL_MACHINE,
 			L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
 			L"Path");
 	}
 	else
 	{
+		::ShowWindow( ::GetDlgItem( m_hWnd, IDC_LIST_SYSTEM), SW_HIDE);
+		::ShowWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_GAIN_PRIVILEGE), SW_SHOW);
+		Button_SetElevationRequiredState( ::GetDlgItem( m_hWnd, IDC_BUTTON_GAIN_PRIVILEGE), TRUE);
+
 		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_UP),     FALSE);
 		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_DOWN),   FALSE);
 		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_ADD),    FALSE);
@@ -181,6 +186,22 @@ BOOL CPathEditorDlg::OnInitDialog( HINSTANCE hInstance, HWND hWnd)
 		::EnableWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_SYSTEM_EDIT),   FALSE);
 	}
 	return TRUE;
+}
+
+void CPathEditorDlg::OnButtonGainPrivilege()
+{
+	WCHAR szBuffer[MAX_PATH];
+	std::fill_n( szBuffer, MAX_PATH, L'\0');
+	if( 0 == GetModuleFileName( 0, szBuffer, MAX_PATH))
+		return;
+
+	SHELLEXECUTEINFO exInfo = { 0 };
+	exInfo.cbSize = sizeof(exInfo);
+	exInfo.lpVerb = L"runas";
+	exInfo.lpFile = szBuffer;
+	exInfo.nShow = SW_SHOW;
+	if( TRUE == ShellExecuteEx( &exInfo))
+		SendMessage( m_hWnd, WM_CLOSE, 0, 0);
 }
 
 BOOL CPathEditorDlg::OnCommand( UINT nMsg, WPARAM wParam, LPARAM lParam)
@@ -217,10 +238,13 @@ BOOL CPathEditorDlg::OnCommand( UINT nMsg, WPARAM wParam, LPARAM lParam)
 	case IDC_BUTTON_SYSTEM_EDIT:
 		m_sysListCtrl.EditPath();
 		break;
+	case IDC_BUTTON_GAIN_PRIVILEGE:
+		OnButtonGainPrivilege();
+		break;
 	case IDOK:
 		OnOK();
 	case IDCANCEL:
-		SendMessage(m_hWnd, WM_CLOSE, 0, 0);
+		SendMessage( m_hWnd, WM_CLOSE, 0, 0);
 		return TRUE;
 	}
 	return FALSE;

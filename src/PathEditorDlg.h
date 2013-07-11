@@ -28,7 +28,7 @@ public:
 	BOOL OnCommand(UINT nMsg, WPARAM wParam, LPARAM lParam);
 	BOOL OnNotify(LPNMHDR lpNMHDR);
 	BOOL OnOK();
-
+	void OnButtonGainPrivilege();
 	void OnListGetDispInfo(NMLVDISPINFO *pDispInfo);
 	void OnListDoubleClick(LPNMITEMACTIVATE lpNMItemActivate);
 };
