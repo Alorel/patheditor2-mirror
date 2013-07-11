@@ -43,7 +43,7 @@ bool CPathReader::Read( StringListT& strList)
 	HKEY hPathKey = 0;
 	if( RegOpenKeyEx( hKey_, lpszKeyName_, 0, KEY_QUERY_VALUE, &hPathKey) != ERROR_SUCCESS)
 		return false;
-	CAutoFree<HKEY,LSTATUS> afPathKey(hPathKey, RegCloseKey);
+	std::shared_ptr<void> afPathKey( hPathKey, RegCloseKey);
 
 	ULONG nChars = 0;
 	if( RegQueryValueEx( hPathKey, lpszValueName_, 0, 0, 0, &nChars) != ERROR_SUCCESS)
@@ -68,7 +68,7 @@ bool CPathReader::Write( const StringListT& strList)
 	HKEY hPathKey = 0;
 	if( RegOpenKeyEx( hKey_, lpszKeyName_, 0, KEY_SET_VALUE, &hPathKey) != ERROR_SUCCESS)
 		return false;
-	CAutoFree<HKEY,LSTATUS> afPathKey(hPathKey, RegCloseKey);
+	std::shared_ptr<void> afPathKey( hPathKey, RegCloseKey);
 
 	std::wstring strValue = join_vector_by( strList, L';');
 	const BYTE* lpcBuffer = reinterpret_cast<const BYTE*>( strValue.c_str());

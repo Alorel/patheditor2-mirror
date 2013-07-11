@@ -1,4 +1,5 @@
 #include "Util.h"
+#include <memory>
 
 std::pair<bool, bool> GetAdminStatus( HANDLE hProcess)
 {
@@ -7,7 +8,7 @@ std::pair<bool, bool> GetAdminStatus( HANDLE hProcess)
     HANDLE hToken;
     if( FALSE == ::OpenProcessToken( hProcess, TOKEN_QUERY, &hToken))
         return retValue;
-    CAutoFree<HANDLE, BOOL> afHandle( hToken, ::CloseHandle);
+    std::shared_ptr<void> afHandle( hToken, ::CloseHandle);
 
     DWORD dwSize = 0;
     if( FALSE == ::GetTokenInformation( hToken, TokenGroups, NULL, dwSize, &dwSize))
@@ -19,7 +20,7 @@ std::pair<bool, bool> GetAdminStatus( HANDLE hProcess)
     PTOKEN_GROUPS pGroupInfo = (PTOKEN_GROUPS)::GlobalAlloc( GPTR, dwSize);
     if( pGroupInfo == 0)
         return retValue;
-    CAutoFree<HGLOBAL, HGLOBAL> afGlobalFree(pGroupInfo, ::GlobalFree);
+    std::shared_ptr<TOKEN_GROUPS> afGlobalFree( pGroupInfo, ::GlobalFree);
 
     if( FALSE == ::GetTokenInformation( hToken, TokenGroups, pGroupInfo, dwSize, &dwSize)) 
         return retValue;
@@ -30,7 +31,7 @@ std::pair<bool, bool> GetAdminStatus( HANDLE hProcess)
                 SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS,
                 0, 0, 0, 0, 0, 0, &pAdminSID))
                 return retValue;
-    CAutoFree<PSID, PVOID> afFreeSID(pAdminSID, ::FreeSid);
+    std::shared_ptr<void> afFreeSID( pAdminSID, ::FreeSid);
 
     for( DWORD i = 0; i < pGroupInfo->GroupCount; i++)
     {
