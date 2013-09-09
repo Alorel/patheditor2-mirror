@@ -27,6 +27,7 @@
 #include "PathReader.h"
 #include "Util.h"
 
+#include <memory>
 #include <sstream>
 #include <regex>
 

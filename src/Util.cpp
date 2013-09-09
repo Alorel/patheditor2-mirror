@@ -26,49 +26,57 @@
 
 #include "Util.h"
 #include <memory>
+#include <vector>
 
-std::pair<bool, bool> GetAdminStatus( HANDLE hProcess)
+BOOL _CheckTokenMembership( HANDLE hToken, PSID pAdminSID, PBOOL pIsMember)
 {
-    std::pair<bool, bool> retValue = std::make_pair( false, false);
+	DWORD dwSize = 0;
+	if( FALSE == ::GetTokenInformation( hToken, TokenGroups, NULL, dwSize, &dwSize))
+	{
+		if( GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+			return FALSE;
+	}
 
-    HANDLE hToken;
-    if( FALSE == ::OpenProcessToken( hProcess, TOKEN_QUERY, &hToken))
-        return retValue;
-    std::shared_ptr<void> afHandle( hToken, ::CloseHandle);
+	std::vector<BYTE> pBuffer(dwSize);
+	PTOKEN_GROUPS pGroupInfo = reinterpret_cast<PTOKEN_GROUPS>( pBuffer.data());
+	if( FALSE == ::GetTokenInformation( hToken, TokenGroups, pGroupInfo, dwSize, &dwSize)) 
+		return FALSE;
 
-    DWORD dwSize = 0;
-    if( FALSE == ::GetTokenInformation( hToken, TokenGroups, NULL, dwSize, &dwSize))
-    {
-        if( GetLastError() != ERROR_INSUFFICIENT_BUFFER)
-            return retValue;
-    }
+	for( DWORD i = 0; i < pGroupInfo->GroupCount; i++)
+	{
+		if( ::EqualSid( pAdminSID, pGroupInfo->Groups[i].Sid))
+		{
+			if( pGroupInfo->Groups[i].Attributes & SE_GROUP_ENABLED)
+			{
+				*pIsMember = TRUE;
+				return TRUE;
+			}
+		}
+	}
+	return FALSE;
+}
 
-    PTOKEN_GROUPS pGroupInfo = (PTOKEN_GROUPS)::GlobalAlloc( GPTR, dwSize);
-    if( pGroupInfo == 0)
-        return retValue;
-    std::shared_ptr<TOKEN_GROUPS> afGlobalFree( pGroupInfo, ::GlobalFree);
+bool IsProcessAdmin( HANDLE hProcess)
+{
+	HANDLE hToken;
+	if( FALSE == ::OpenProcessToken( hProcess, TOKEN_QUERY, &hToken))
+		return false;
+	std::shared_ptr<void> afHandle( hToken, ::CloseHandle);
 
-    if( FALSE == ::GetTokenInformation( hToken, TokenGroups, pGroupInfo, dwSize, &dwSize)) 
-        return retValue;
+	PSID pAdminSID = 0;
+	SID_IDENTIFIER_AUTHORITY sidAuthority = SECURITY_NT_AUTHORITY;
+	if( FALSE == ::AllocateAndInitializeSid(
+		&sidAuthority,
+		2,
+		SECURITY_BUILTIN_DOMAIN_RID,
+		DOMAIN_ALIAS_RID_ADMINS,
+		0, 0, 0, 0, 0, 0,
+		&pAdminSID))
+		return false;
+	std::shared_ptr<void> afFreeSID( pAdminSID, ::FreeSid);
 
-    PSID pAdminSID;
-    SID_IDENTIFIER_AUTHORITY sidAuthority = SECURITY_NT_AUTHORITY;
-    if( FALSE == ::AllocateAndInitializeSid( &sidAuthority, 2,
-                SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS,
-                0, 0, 0, 0, 0, 0, &pAdminSID))
-                return retValue;
-    std::shared_ptr<void> afFreeSID( pAdminSID, ::FreeSid);
-
-    for( DWORD i = 0; i < pGroupInfo->GroupCount; i++)
-    {
-        if(::EqualSid(pAdminSID, pGroupInfo->Groups[i].Sid))
-        {      
-            if (pGroupInfo->Groups[i].Attributes & SE_GROUP_ENABLED)
-                retValue.first = true;
-            else
-                retValue.second = true;
-            break;
-        }
-    }
-    return retValue;
+	BOOL isMember = FALSE;
+	if( FALSE == _CheckTokenMembership( hToken, pAdminSID, &isMember))
+		return false;
+	return isMember == TRUE;
 }

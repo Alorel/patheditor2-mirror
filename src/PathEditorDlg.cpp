@@ -188,10 +188,10 @@ BOOL CPathEditorDlg::OnInitDialog( HINSTANCE hInstance, HWND hWnd)
 	if( _CenterWindow() == FALSE)
 		return FALSE;
 
-	m_bIsAdmin = GetAdminStatus(::GetCurrentProcess());
+	m_bIsAdmin = IsProcessAdmin( ::GetCurrentProcess());
 	m_usrListCtrl.Init( ::GetDlgItem(m_hWnd, IDC_LIST_USER), m_hImageList,
 		HKEY_CURRENT_USER, L"Environment", L"Path");
-    if(m_bIsAdmin.first)
+    if(m_bIsAdmin)
 	{
 		::ShowWindow( ::GetDlgItem( m_hWnd, IDC_BUTTON_GAIN_PRIVILEGE), SW_HIDE);
         m_sysListCtrl.Init( ::GetDlgItem( m_hWnd, IDC_LIST_SYSTEM), m_hImageList,
@@ -324,7 +324,7 @@ BOOL CPathEditorDlg::OnOK()
 		return FALSE;
 	}
 
-	if( m_bIsAdmin.first && !m_sysListCtrl.Commit())
+	if( m_bIsAdmin && !m_sysListCtrl.Commit())
 	{
 		MessageBox( m_hWnd, L"Failed to save System PATH", L"Path Editor", MB_OK);
 		return FALSE;

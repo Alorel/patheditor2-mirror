@@ -36,7 +36,7 @@ private:
 	HICON m_hIcon;
 	HIMAGELIST m_hImageList;
 
-	std::pair<bool, bool> m_bIsAdmin;
+	bool m_bIsAdmin;
 	CPathListCtrl m_usrListCtrl;
 	CPathListCtrl m_sysListCtrl;
 
