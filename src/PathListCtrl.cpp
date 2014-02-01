@@ -45,7 +45,11 @@ void CPathListCtrl::_ExpandEnvironmentStrings( wchar_t* pszDst, int nLen, const 
         return;
     }
 
+#ifdef _HAS_ITERATOR_DEBUGGING
     stdext::checked_array_iterator<wchar_t*> iter( pszDst, nLen);
+#else
+    wchar_t* iter = pszDst;
+#endif
     std::size_t nMaxCopy = nLen;
     if( nMaxCopy >= sVar.size())
         nMaxCopy = sVar.size();
@@ -181,7 +185,11 @@ void CPathListCtrl::OnGetdispinfo( NMLVDISPINFO *pDispInfo)
         if( pDispInfo->item.iSubItem == 0)
         {
             std::wstring& sItem = m_str_list[pDispInfo->item.iItem];
+#ifdef _HAS_ITERATOR_DEBUGGING
             stdext::checked_array_iterator<wchar_t*> iter( pDispInfo->item.pszText, pDispInfo->item.cchTextMax);
+#else
+			wchar_t* iter =  pDispInfo->item.pszText;
+#endif
             std::size_t nLen = pDispInfo->item.cchTextMax;
 
             if( nLen >= sItem.size())
