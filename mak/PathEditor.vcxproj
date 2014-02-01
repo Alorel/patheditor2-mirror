@@ -45,6 +45,9 @@
     <None Include="..\src\res\dir_up.ico" />
     <None Include="..\src\res\PathEditor.ico" />
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\src\PathEditor.manifest" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{0419555B-310A-425C-A62A-F606AC6E32AF}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>

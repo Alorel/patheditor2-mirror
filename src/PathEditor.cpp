@@ -25,25 +25,13 @@
  */
 
 #include <windows.h>
-#include <commctrl.h>
 #include "resource.h"
 #include "PathEditorDlg.h"
-
-#pragma comment(linker, \
-	"\"/manifestdependency:type='Win32' "\
-	"name='Microsoft.Windows.Common-Controls' "\
-	"version='6.0.0.0' "\
-	"processorArchitecture='*' "\
-	"publicKeyToken='6595b64144ccf1df' "\
-	"language='*'\"")
-
-#pragma comment(lib, "comctl32.lib")
 
 INT_PTR CALLBACK DialogProc(HWND hWnd, UINT, WPARAM wParam, LPARAM lParam);
 
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd)
 {
-	InitCommonControls();
 	HWND hWnd = CreateDialogParam( hInstance, MAKEINTRESOURCE(IDD_PATHEDITOR_DIALOG), 0,
 		DialogProc, reinterpret_cast<LPARAM>(hInstance));
 	ShowWindow( hWnd, nShowCmd);
