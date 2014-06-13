@@ -218,15 +218,14 @@ BOOL CPathEditorDlg::OnInitDialog( HINSTANCE hInstance, HWND hWnd)
 
 void CPathEditorDlg::OnButtonGainPrivilege()
 {
-	WCHAR szBuffer[MAX_PATH];
-	std::fill_n( szBuffer, MAX_PATH, L'\0');
-	if( 0 == GetModuleFileName( 0, szBuffer, MAX_PATH))
+	std::wstring strBuffer(MAX_PATH, 0);
+	if (0 == GetModuleFileName(0, &strBuffer[0], static_cast<DWORD>(strBuffer.size())))
 		return;
 
 	SHELLEXECUTEINFO exInfo = { 0 };
 	exInfo.cbSize = sizeof(exInfo);
 	exInfo.lpVerb = L"runas";
-	exInfo.lpFile = szBuffer;
+	exInfo.lpFile = strBuffer.c_str();
 	exInfo.nShow = SW_SHOW;
 	if( TRUE == ShellExecuteEx( &exInfo))
 		SendMessage( m_hWnd, WM_CLOSE, 0, 0);

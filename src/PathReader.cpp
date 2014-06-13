@@ -41,7 +41,9 @@ StringListT split_string_by( const std::wstring& sInput, wchar_t wcSeparator)
 
     std::wsregex_token_iterator begin( sInput.begin(), sInput.end(), reSeparator);
     std::wsregex_token_iterator end;
-    std::copy( begin, end, std::back_inserter( strList));
+
+	std::copy( begin, end, std::back_inserter( strList));
+	strList.erase(std::remove_if(strList.begin(), strList.end(), [](const std::wstring str){ return str.empty() || str[0] == 0; }), strList.end());
     return strList;
 }
 
@@ -80,12 +82,11 @@ bool CPathReader::Read( StringListT& strList)
 	if(nChars == 0)
 		return true;
 
-	std::vector<BYTE> vBuffer(nChars + sizeof(wchar_t), 0);
-	LPBYTE lpBuffer = vBuffer.data();
+	std::wstring sBuffer(nChars / sizeof(wchar_t), 0);
+	LPBYTE lpBuffer = reinterpret_cast<LPBYTE>(&sBuffer[0]);
 	if( RegQueryValueEx( hPathKey, lpszValueName_, 0, 0, lpBuffer, &nChars) != ERROR_SUCCESS)
 		return false;
 
-	std::wstring sBuffer(reinterpret_cast<wchar_t*>(lpBuffer));
 	strList = split_string_by( sBuffer, L';');
 	return true;
 }

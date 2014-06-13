@@ -42,7 +42,7 @@ private:
 	CPathReader m_reader;
 
 private:
-	void _ExpandEnvironmentStrings( wchar_t* pszDst, int nLen, const std::wstring& sVar);
+	std::wstring _ExpandEnvironmentStrings(const std::wstring& sVar);
 	int _GetImageIndex( std::wstring fname);
 
 public:

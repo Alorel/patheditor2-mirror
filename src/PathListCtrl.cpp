@@ -37,31 +37,29 @@ int CALLBACK BrowseCallbackProc( HWND hWnd, UINT uMsg, LPARAM lParam, LPARAM lpD
     return 0;
 }
 
-void CPathListCtrl::_ExpandEnvironmentStrings( wchar_t* pszDst, int nLen, const std::wstring& sVar)
+std::wstring CPathListCtrl::_ExpandEnvironmentStrings(const std::wstring& sVar)
 {
-    if( std::wstring::npos != sVar.find( L'%'))
-    {
-        ExpandEnvironmentStrings( sVar.c_str(), pszDst, nLen);
-        return;
-    }
+	if (std::wstring::npos == sVar.find(L'%'))
+		return sVar;
 
-#ifdef _HAS_ITERATOR_DEBUGGING
-    stdext::checked_array_iterator<wchar_t*> iter( pszDst, nLen);
-#else
-    wchar_t* iter = pszDst;
-#endif
-    std::size_t nMaxCopy = nLen;
-    if( nMaxCopy >= sVar.size())
-        nMaxCopy = sVar.size();
-    std::copy_n( sVar.begin(), nMaxCopy, iter);
+	DWORD dwLen = 0;
+	dwLen = ExpandEnvironmentStrings(sVar.c_str(), nullptr, dwLen);
+	if (dwLen == 0)
+		return L"";
+
+	std::wstring strValue(dwLen, 0);
+	dwLen = ExpandEnvironmentStrings(sVar.c_str(), &strValue[0], dwLen);
+	if (dwLen == 0)
+		return L"";
+
+	strValue.resize(strValue.find_first_of(L'\0'));
+	return strValue;
 }
 
 int CPathListCtrl::_GetImageIndex( std::wstring fname)
 {
-    int imgIndex = 0;
-    WCHAR szDst[MAX_PATH] = { 0 };
-    _ExpandEnvironmentStrings( szDst, MAX_PATH, fname);
-    return GetFileAttributes( szDst) == INVALID_FILE_ATTRIBUTES ? 1 : 0;
+    std::wstring pathName = _ExpandEnvironmentStrings(fname);
+    return GetFileAttributes(pathName.c_str()) == INVALID_FILE_ATTRIBUTES ? 1 : 0;
 }
 
 void CPathListCtrl::Init( HWND hWnd, HIMAGELIST hImageList, HKEY hKey, LPCTSTR lpszKeyName, LPCTSTR lpszValueName)
@@ -77,11 +75,11 @@ void CPathListCtrl::Init( HWND hWnd, HIMAGELIST hImageList, HKEY hKey, LPCTSTR l
     lvColumn.cx = reg.right - reg.left;
     ListView_InsertColumn( m_hWnd, 0, &lvColumn);
 
-	DWORD dwStyle = LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES;
+    DWORD dwStyle = LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES;
     ListView_SetExtendedListViewStyle( m_hWnd, dwStyle);
 
-	// load data
-	m_reader = CPathReader( hKey, lpszKeyName, lpszValueName);
+    // load data
+    m_reader = CPathReader( hKey, lpszKeyName, lpszValueName);
     m_reader.Read( m_str_list);
     for( std::size_t count = 0; count < m_str_list.size(); ++count)
     {
@@ -99,10 +97,12 @@ bool CPathListCtrl::Commit()
     StringListT strList;
     for( int i = 0; i < ListView_GetItemCount( m_hWnd); ++i)
     {
-        wchar_t pszText[MAX_PATH];
         int cchTextMax = MAX_PATH;
-        ListView_GetItemText( m_hWnd, i, 0, pszText, cchTextMax);
-        strList.push_back( std::wstring( pszText));
+        std::wstring strValue(cchTextMax, 0);
+        ListView_GetItemText(m_hWnd, i, 0, &strValue[0], cchTextMax);
+
+        strValue.resize(strValue.find_first_of(L'\0'));
+        strList.push_back(strValue);
     }
     return m_reader.Write( strList);
 }
@@ -115,9 +115,10 @@ void CPathListCtrl::AddPath()
     PIDLIST_ABSOLUTE strList = SHBrowseForFolder( &bi);
     if( strList)
     {
-        TCHAR szPath[MAX_PATH] = { 0 };
-        SHGetPathFromIDList( strList, szPath);
-        m_str_list.push_back( szPath);
+        std::wstring strPath(MAX_PATH, 0);
+        SHGetPathFromIDList(strList, &strPath[0]);
+        strPath.resize(strPath.find_first_of(L'\0'));
+        m_str_list.push_back(strPath);
 
         LVITEM lvItem = { 0 };
         lvItem.mask = LVIF_TEXT | LVIF_STATE;
@@ -138,16 +139,17 @@ void CPathListCtrl::EditPath()
     bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_EDITBOX | BIF_USENEWUI | BIF_NEWDIALOGSTYLE;
     bi.lpfn = BrowseCallbackProc;
 
-    WCHAR szDst[MAX_PATH] = { 0 };
-    _ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
-    bi.lParam = reinterpret_cast<LPARAM>( szDst);
+    std::wstring pathName = _ExpandEnvironmentStrings(m_str_list[iItem]);
+    bi.lParam = reinterpret_cast<LPARAM>(pathName.c_str());
 
     PIDLIST_ABSOLUTE strList = SHBrowseForFolder( &bi);
     if( strList)
     {
-        TCHAR szPath[MAX_PATH];
-        SHGetPathFromIDList( strList, szPath);
-        m_str_list[iItem] = szPath;
+        std::wstring pathName(MAX_PATH, 0);
+        SHGetPathFromIDList(strList, &pathName[0]);
+        pathName.resize(pathName.find_first_of(L'\0'));
+
+        m_str_list[iItem] = pathName;
         ListView_Update( m_hWnd, iItem);
     }
 }
@@ -158,9 +160,10 @@ void CPathListCtrl::OnDoubleClick( LPNMITEMACTIVATE lpNMItemActivate)
     if( iItem == -1)
         return;
 
-    WCHAR szDst[MAX_PATH] = { 0 };
-    _ExpandEnvironmentStrings( szDst, MAX_PATH, m_str_list[iItem]);
-    ShellExecute( 0, L"open", L"explorer.exe", szDst, 0, SW_NORMAL);
+    std::wstring pathName = _ExpandEnvironmentStrings(m_str_list[iItem]);
+    if (GetFileAttributes(pathName.c_str()) == INVALID_FILE_ATTRIBUTES)
+        return;
+    ShellExecute(0, L"open", pathName.c_str(), 0, 0, SW_NORMAL);
 }
 
 void CPathListCtrl::RemovePath()
@@ -185,17 +188,7 @@ void CPathListCtrl::OnGetdispinfo( NMLVDISPINFO *pDispInfo)
         if( pDispInfo->item.iSubItem == 0)
         {
             std::wstring& sItem = m_str_list[pDispInfo->item.iItem];
-#ifdef _HAS_ITERATOR_DEBUGGING
-            stdext::checked_array_iterator<wchar_t*> iter( pDispInfo->item.pszText, pDispInfo->item.cchTextMax);
-#else
-			wchar_t* iter =  pDispInfo->item.pszText;
-#endif
-            std::size_t nLen = pDispInfo->item.cchTextMax;
-
-            if( nLen >= sItem.size())
-                nLen = sItem.size();
-            auto iterLast = std::copy_n( sItem.begin(), nLen, iter);
-            *iterLast = L'\0';
+            pDispInfo->item.pszText = &sItem[0];
         }
     }
 
